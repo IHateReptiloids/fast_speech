@@ -16,8 +16,8 @@ class WaveGlow(nn.Module):
         super().__init__()
 
         checkpoint_path = Path(checkpoint_path)
+        checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
         if not checkpoint_path.exists():
-            checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
             gdd.download_file_from_google_drive(
                 file_id=GDRIVE_FILE_ID,
                 dest_path=str(checkpoint_path)

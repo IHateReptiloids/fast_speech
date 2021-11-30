@@ -6,6 +6,10 @@ import torch
 import torch.nn as nn
 import torchaudio
 
+from src.configs import FastSpeechConfig
+
+WAV2VEC_SR = 16_000
+
 
 @dataclass
 class Point:
@@ -31,7 +35,7 @@ class Segment:
 
 
 class GraphemeAligner(nn.Module):
-    def __init__(self):
+    def __init__(self, config: FastSpeechConfig):
         super().__init__()
 
         self._wav2vec2 = torchaudio.pipelines.WAV2VEC2_ASR_BASE_960H \
@@ -39,6 +43,9 @@ class GraphemeAligner(nn.Module):
         self._labels = torchaudio.pipelines.WAV2VEC2_ASR_BASE_960H.get_labels()
         self._char2index = {c: i for i, c in enumerate(self._labels)}
         self._unk_index = self._char2index['<unk>']
+        self._resampler = torchaudio.transforms.Resample(
+            orig_freq=config.sample_rate, new_freq=WAV2VEC_SR
+        )
 
     def _decode_text(self, text):
         text = text.replace(' ', '|').upper()
@@ -60,9 +67,9 @@ class GraphemeAligner(nn.Module):
 
         durations = []
         for index in range(batch_size):
-            emission, _ = self._wav2vec2(
-                wavs[index, :wav_lengths[index]].unsqueeze(dim=0)
-            )
+            current_wav = wavs[index, :wav_lengths[index]].unsqueeze(dim=0)
+            current_wav = self._resampler(current_wav)
+            emission, _ = self._wav2vec2(current_wav)
             emission = emission.log_softmax(dim=-1).squeeze(dim=0).cpu()
 
             tokens = self._decode_text(texts[index])
@@ -79,7 +86,7 @@ class GraphemeAligner(nn.Module):
             durations.append(relative_durations)
 
         durations = nn.utils.rnn.pad_sequence(durations).transpose(0, 1)
-        return durations
+        return durations / durations.sum(dim=-1, keepdim=True)
 
     def _get_trellis(self, emission, tokens, blank_id=0):
         num_frame = emission.size(0)

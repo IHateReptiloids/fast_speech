@@ -13,7 +13,10 @@ class SelfAttention(nn.Module):
         self.value_projector = nn.Linear(dim_v, dim_v)
         self.final_projector = nn.Linear(dim_v, dim_v)
 
-    def forward(self, q, k, v, mask=None):
+    def forward(self, x, mask=None):
+        return self._forward(x, x, x, mask)
+
+    def _forward(self, q, k, v, mask=None):
         '''
         q, k, v are of shape [bs, seq_len, n_features]
         mask is of shape [seq_len, seq_len]
@@ -31,7 +34,7 @@ class SelfAttention(nn.Module):
         v = self.value_projector(v).view(*v.shape[:-1], self.n_heads, -1)\
             .transpose(1, 2)
         x = self.attend(q, k, v, mask).transpose(1, 2)
-        return self.final_projector(x.view(x.shape[:-2], -1))
+        return self.final_projector(x.reshape(*x.shape[:-2], -1))
 
     @staticmethod
     def attend(q, k, v, mask=None):
@@ -47,7 +50,8 @@ class SelfAttention(nn.Module):
         assert k.shape[-2] == v.shape[-2]
         dim_k = k.shape[-1]
 
-        sim = torch.matmul(q, k.transpose(-1, -2)) / torch.sqrt(dim_k)
+        sim = (torch.matmul(q, k.transpose(-1, -2)) /
+               torch.sqrt(torch.tensor(dim_k)))
         sim = F.softmax(sim, dim=-1)
         if mask is not None:
             sim = sim * mask

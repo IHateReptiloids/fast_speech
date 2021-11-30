@@ -1,4 +1,6 @@
 .vscode/
 data/
+waveglow/
 *.ipynb
+*.wav
 **/__pycache__

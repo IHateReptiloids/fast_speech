@@ -1,6 +1,11 @@
+from copy import deepcopy
+from pathlib import Path
+
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
+
+from src.data_utils import Batch
 
 
 class DefaultTrainer:
@@ -8,45 +13,83 @@ class DefaultTrainer:
         self,
         device,
         model,
-        aligner,
+        opt,
+        scheduler,
+        wav2spec,
         train_loader,
-        val_loader
+        val_loader,
     ):
-        raise NotImplementedError
+        self.device = device
+        self.model = model
+        self.opt = opt
+        self.scheduler = scheduler
+        self.wav2spec = wav2spec
+        self.train_loader = train_loader
+        self.val_loader = val_loader
 
-    def train(self, num_epochs, validate=False):
+        self._best_state = None
+        self._best_loss = 1e9
+
+    def save_best_state(self, path):
+        path = Path(path)
+        if path.exists():
+            path.unlink()
+        if not path.parent.exists():
+            path.parent.mkdir(parents=True)
+        torch.save(self._best_state, path)
+
+    def train(self, num_epochs, validate=False, verbose=True):
         for i in range(1, num_epochs + 1):
             train_loss = self.train_epoch()
-            print(f'Epoch {i + 1} train loss: {train_loss}')
+            if train_loss < self._best_loss:
+                self._best_loss = train_loss
+                self._best_state = deepcopy(self.model.state_dict())
+            if verbose:
+                print(f'Epoch {i} train loss: {train_loss}')
             if validate:
                 val_loss = self.validate()
-                print(f'Epoch {i + 1} validation loss: {val_loss}')
-            print('-' * 100)
+                if verbose:
+                    print(f'Epoch {i} validation loss: {val_loss}')
+            if verbose:
+                print('-' * 100)
+            if self.scheduler is not None:
+                self.scheduler.step()
 
-    def train_batch(self, batch):
-        '''
-        x is of shape [bs, seq_len]
-        y is of shape [bs, seq_len, n_mels]
-        spec_lengths is of shape [bs]
-        grapheme_lengths is of shape [bs, seq_len]
-        '''
-        x = batch.x.to(self.device)
-        y = batch.y.to(self.device)
-        assert x.shape == y.shape[:-1]
-        seq_len = x.shape[-1]
+    def train_batch(self, batch: Batch):
+        wavs = batch.waveform.to(self.device)
+        assert wavs.dim() == 2
 
-        spec_lengths = batch.spec_lengths.to(self.device)
-        assert spec_lengths.dtype == torch.int32
-        # TODO: fix this
-        grapheme_lengths = self.aligner(...)
-        assert grapheme_lengths.dtype == torch.int32
-        spec_lengths = grapheme_lengths.sum(dim=-1)
+        wav_lengths = batch.waveform_length.to(self.device)
+        assert wav_lengths.dim() == 1 and len(wav_lengths) == len(wavs)
 
-        mask = (torch.arange(seq_len)[None, :] < spec_lengths[:, None]) \
-            .unsqueeze(-1)
+        durations = batch.durations.to(self.device)
+        assert durations.dim() == 2 and len(durations) == len(wavs)
+
+        # specs is of shape [bs, n_mels, time]
+        specs = self.wav2spec(wavs)
+        spec_lengths = self.wav2spec.transform_lengths(wav_lengths)
+        assert specs.shape[-1] == torch.max(spec_lengths).item()
+
+        grapheme_lengths = (durations * spec_lengths[:, None])
+        output_lengths = grapheme_lengths.round().int().sum(dim=-1)
+
+        x = batch.tokens.to(self.device)
+        assert x.shape == durations.shape
         output = self.model(x, grapheme_lengths)
-        loss = F.mse_loss(output * mask, y * mask)
-        return loss + self.model.length_regulator.loss
+        assert (output.dim() == 3 and
+                output.shape[-1] == torch.max(output_lengths).item())
+
+        loss = 0
+        for i in range(output.shape[0]):
+            reshaped = F.interpolate(
+                output[i, :, :output_lengths[i]].unsqueeze(0),
+                size=spec_lengths[i],
+                mode='linear',
+                align_corners=False
+            )
+            loss += F.mse_loss(reshaped.squeeze(),
+                               specs[i, :, :spec_lengths[i]])
+        return loss / output.shape[0] + self.model.length_regulator.loss
 
     def train_epoch(self):
         self.model.train()
@@ -61,6 +104,7 @@ class DefaultTrainer:
 
     @torch.no_grad()
     def validate(self):
+        self.model.eval()
         raise NotImplementedError
 
     @torch.no_grad()
