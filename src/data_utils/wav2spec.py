@@ -32,6 +32,7 @@ class Wav2Spec(nn.Module):
             fmax=config.f_max
         ).T
         self.mel_spectrogram.mel_scale.fb.copy_(torch.tensor(mel_basis))
+        self.to(config.device)
 
     def forward(self, audio: torch.Tensor) -> torch.Tensor:
         """

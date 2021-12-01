@@ -46,6 +46,7 @@ class GraphemeAligner(nn.Module):
         self._resampler = torchaudio.transforms.Resample(
             orig_freq=config.sample_rate, new_freq=WAV2VEC_SR
         )
+        self.to(config.device)
 
     def _decode_text(self, text):
         text = text.replace(' ', '|').upper()

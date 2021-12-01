@@ -22,6 +22,7 @@ class FastSpeech(nn.Module):
             for _ in range(config.n_layers)
         ])
         self.projector = nn.Linear(config.d_model, config.n_mels)
+        self.to(config.device)
 
     def forward(self, x, y=None):
         '''
