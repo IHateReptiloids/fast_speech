@@ -1,3 +1,4 @@
+import argparse
 from functools import partial
 import pickle
 
@@ -22,12 +23,17 @@ def lr_multiplier(config: FastSpeechConfig, step: int):
             min(step ** -0.5, step * (config.warmup_steps ** -1.5)))
 
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--path', dest='path', action='store',
+                    default='data/lj_speech')
+root_dir = parser.parse_args().path
+
 seed_all()
 config = FastSpeech2Config()
 fs = FastSpeech(config)
 summary(fs)
 
-ds = LJSpeechDataset()
+ds = LJSpeechDataset(root=root_dir)
 one_batch = []
 
 loader = torch.utils.data.DataLoader(ds, batch_size=16,
