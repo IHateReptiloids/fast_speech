@@ -51,7 +51,7 @@ class SelfAttention(nn.Module):
         dim_k = k.shape[-1]
 
         sim = (torch.matmul(q, k.transpose(-1, -2)) /
-               torch.sqrt(torch.tensor([dim_k])))
+               (dim_k ** 0.5))
         sim = F.softmax(sim, dim=-1)
         if mask is not None:
             sim = sim * mask

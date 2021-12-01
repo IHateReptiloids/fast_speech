@@ -33,10 +33,10 @@ class FastSpeech(nn.Module):
         returns: mel specs of shape (bs, n_mels, time)
         '''
         x = self.embeddings(x)
-        x = self.pos_encoding(x)
+        x = x + self.pos_encoding(x)
         x = self.phoneme_layers(x)
         x = self.length_regulator(x, y)
-        x = self.pos_encoding(x)
+        x = x + self.pos_encoding(x)
         x = self.mel_layers(x)
         x = self.projector(x)
         return x.transpose(-1, -2)

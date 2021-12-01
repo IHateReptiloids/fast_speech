@@ -82,13 +82,13 @@ class DefaultTrainer:
         loss = 0
         for i in range(output.shape[0]):
             reshaped = F.interpolate(
-                output[i, :, :output_lengths[i]].unsqueeze(0),
-                size=spec_lengths[i],
+                specs[i, :, :spec_lengths[i]].unsqueeze(0),
+                size=output_lengths[i],
                 mode='linear',
                 align_corners=False
             )
-            loss += F.mse_loss(reshaped.squeeze(),
-                               specs[i, :, :spec_lengths[i]])
+            loss += F.mse_loss(output[i, :, :output_lengths[i]],
+                               reshaped.squeeze())
         return loss / output.shape[0] + self.model.length_regulator.loss
 
     def train_epoch(self):
