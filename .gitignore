@@ -1,5 +1,6 @@
 .vscode/
-data/
+data/lj_speech/LJSpeech-1.1/
+data/waveglow
 waveglow/
 *.wav
 **/__pycache__
