@@ -1,4 +1,5 @@
 from pathlib import Path
+import string
 
 import torch
 import torchaudio
@@ -14,7 +15,11 @@ class LJSpeechDataset(torchaudio.datasets.LJSPEECH):
 
     def __getitem__(self, index: int):
         waveform, _, _, transcript = super().__getitem__(index)
+
+        to_remove = string.punctuation.replace("'", '')
         transcript = transcript.replace('"', "'")
+        transcript = transcript.translate(str.maketrans('', '', to_remove))
+
         waveform_length = torch.tensor([waveform.shape[-1]]).int()
 
         tokens, token_lengths = self._tokenizer(transcript)
