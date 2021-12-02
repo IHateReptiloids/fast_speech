@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List
 
 import torch
 
@@ -11,4 +11,4 @@ class Batch:
     transcript: List[str]
     tokens: torch.Tensor
     token_lengths: torch.Tensor
-    durations: Optional[torch.Tensor] = None
+    durations: torch.Tensor

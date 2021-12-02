@@ -5,18 +5,19 @@ from .batch import Batch
 
 
 def collate(instances):
-    waveform, waveform_length, transcript, tokens, token_lengths = list(
-        zip(*instances)
+    waveform, waveform_length, transcript, tokens, token_lengths, durations = (
+        list(zip(*instances))
     )
 
-    waveform = pad_sequence([
-        waveform_[0] for waveform_ in waveform
-    ]).transpose(0, 1)
+    waveform = pad_sequence([waveform_ for waveform_ in waveform],
+                            batch_first=True)
     waveform_length = torch.cat(waveform_length)
 
-    tokens = pad_sequence([
-        tokens_[0] for tokens_ in tokens
-    ]).transpose(0, 1)
+    tokens = pad_sequence([tokens_ for tokens_ in tokens], batch_first=True)
     token_lengths = torch.cat(token_lengths)
 
-    return Batch(waveform, waveform_length, transcript, tokens, token_lengths)
+    durations = pad_sequence([durations_ for durations_ in durations],
+                             batch_first=True)
+
+    return Batch(waveform, waveform_length, transcript,
+                 tokens, token_lengths, durations)
