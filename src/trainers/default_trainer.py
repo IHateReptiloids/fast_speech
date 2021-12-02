@@ -52,11 +52,11 @@ class DefaultTrainer:
                 print('-' * 100)
 
     def train_epoch(self):
-        self._do_epoch(train=True)
+        return self._do_epoch(train=True)
 
     @torch.no_grad()
     def validate(self):
-        self._do_epoch(train=False)
+        return self._do_epoch(train=False)
 
     def _do_epoch(self, train: bool):
         self.model.train(mode=train)
