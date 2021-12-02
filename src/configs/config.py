@@ -6,6 +6,9 @@ import torch
 
 @dataclass
 class FastSpeechConfig:
+    data_dir: str = 'data/lj_speech'
+    device: torch.device = torch.device('cuda:0' if torch.cuda.is_available()
+                                        else 'cpu')
     # MelSpectrogram params
     sample_rate: int = 22050
     win_length: int = 1024
@@ -16,6 +19,7 @@ class FastSpeechConfig:
     n_mels: int = 80
     power: float = 1.0
     # FastSpeech params
+    n_tokens: int = 38
     n_layers: int = 6
     d_model: int = 384
     d_ff: int = 1536
@@ -30,11 +34,14 @@ class FastSpeechConfig:
     initial_lr: float = 1.0
     warmup_steps: int = 4000
     weight_decay: float = 0.0
-    # Other
-    device: torch.device = torch.device('cuda:0' if torch.cuda.is_available()
-                                        else 'cpu')
-    n_tokens: int = 38
-    num_epochs: int = 3000
+    # Logger params
+    log_freq: int = 100
+    # Training params
+    num_epochs: int = 10
+    train_batch_size: int = 32
+    train_num_workers: int = 4
+    val_batch_size: int = 32
+    val_num_workers: int = 4
 
 
 @dataclass

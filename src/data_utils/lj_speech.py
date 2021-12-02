@@ -38,8 +38,8 @@ class LJSpeechDataset(torchaudio.datasets.LJSPEECH):
 
         durations = self._durations_cache.get(index)
         if durations is None:
-            durations = self._aligner(waveform, waveform_length, transcript) \
-                .squeeze()
+            durations = self._aligner(waveform[None, :], waveform_length,
+                                      transcript).squeeze()
             self._durations_cache[index] = durations
 
         return (waveform, waveform_length, transcript,
