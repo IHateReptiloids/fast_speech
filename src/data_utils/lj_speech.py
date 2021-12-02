@@ -1,5 +1,4 @@
 from pathlib import Path
-import string
 
 import numpy as np
 import torch
@@ -13,6 +12,7 @@ class LJSpeechDataset(torchaudio.datasets.LJSPEECH):
         super().__init__(root=root, download=True)
         self._tokenizer = torchaudio.pipelines \
             .TACOTRON2_GRIFFINLIM_CHAR_LJSPEECH.get_text_processor()
+        self._tokens = set(self._tokenizer.tokens)
         self._indices = None
         if indices_path is not None:
             self._indices = np.loadtxt(indices_path, dtype=np.int32)
@@ -22,9 +22,9 @@ class LJSpeechDataset(torchaudio.datasets.LJSPEECH):
             index = self._indices[index]
         waveform, _, _, transcript = super().__getitem__(index)
 
-        to_remove = string.punctuation.replace("'", '')
+        transcript = transcript.lower()
         transcript = transcript.replace('"', "'")
-        transcript = transcript.translate(str.maketrans('', '', to_remove))
+        transcript = ''.join(filter(lambda c: c in self._tokens, transcript))
 
         waveform_length = torch.tensor([waveform.shape[-1]]).int()
 
