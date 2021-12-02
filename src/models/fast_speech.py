@@ -1,7 +1,6 @@
 from positional_encodings import PositionalEncoding1D
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from src.configs import FastSpeechConfig
 from .self_attention import SelfAttention
@@ -30,23 +29,23 @@ class FastSpeech(nn.Module):
         y: target lengths
         if y is not None, computes loss between predicted
         lengths and target lengths
-        returns: mel specs of shape (bs, n_mels, time)
+        returns: mel specs of shape (bs, n_mels, time) and predicted
+        lengths of shape (bs, seq_len)
         '''
         x = self.embeddings(x)
         x = x + self.pos_encoding(x)
         x = self.phoneme_layers(x)
-        x = self.length_regulator(x, y)
+        x, lengths = self.length_regulator(x, y)
         x = x + self.pos_encoding(x)
         x = self.mel_layers(x)
         x = self.projector(x)
-        return x.transpose(-1, -2)
+        return x.transpose(-1, -2), lengths
 
 
 class LengthRegulator(nn.Module):
     def __init__(self, config: FastSpeechConfig):
         super().__init__()
         self.duration_predictor = DurationPredictor(config)
-        self._loss = None
 
     def forward(self, x, y=None):
         '''
@@ -54,24 +53,18 @@ class LengthRegulator(nn.Module):
         y: target lengths
         if y is not None, computes loss between predicted
         lengths and target lengths
+        returns: repeated sequence and predicted lengths
         '''
-        lengths = self.duration_predictor(x)
-        assert lengths.shape == x.shape[:-1]
+        predicted = self.duration_predictor(x)
+        assert predicted.shape == x.shape[:-1]
         if y is not None:
-            self._loss = F.mse_loss(lengths, y)
             lengths = y.round().int()
         else:
-            lengths = lengths.round().int()
+            lengths = predicted.round().int()
         repeated = []
         for seq, seq_lengths in zip(x, lengths):
             repeated.append(torch.repeat_interleave(seq, seq_lengths, dim=0))
-        return nn.utils.rnn.pad_sequence(repeated, batch_first=True)
-
-    @property
-    def loss(self):
-        _loss = self._loss
-        self._loss = None
-        return _loss
+        return nn.utils.rnn.pad_sequence(repeated, batch_first=True), predicted
 
 
 class DurationPredictor(nn.Module):
