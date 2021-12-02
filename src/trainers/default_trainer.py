@@ -1,5 +1,4 @@
 from copy import deepcopy
-from pathlib import Path
 
 import torch
 import torch.nn.functional as F
@@ -27,16 +26,8 @@ class DefaultTrainer:
         self.train_loader = train_loader
         self.val_loader = val_loader
 
-        self._best_state = None
-        self._best_loss = 1e9
-
-    def save_best_state(self, path):
-        path = Path(path)
-        if path.exists():
-            path.unlink()
-        if not path.parent.exists():
-            path.parent.mkdir(parents=True)
-        torch.save(self._best_state, path)
+        self.best_state = None
+        self.best_loss = 1e9
 
     def train(self, num_epochs, verbose=True):
         for i in range(1, num_epochs + 1):
@@ -44,9 +35,9 @@ class DefaultTrainer:
             if verbose:
                 print(f'Epoch {i} train loss: {train_loss}')
             val_loss = self.validate()
-            if val_loss < self._best_loss:
-                self._best_loss = val_loss
-                self._best_state = deepcopy(self.model.state_dict())
+            if val_loss < self.best_loss:
+                self.best_loss = val_loss
+                self.best_state = deepcopy(self.model.state_dict())
             if verbose:
                 print(f'Epoch {i} validation loss: {val_loss}')
                 print('-' * 100)
