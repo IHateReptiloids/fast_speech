@@ -35,15 +35,14 @@ class DefaultTrainer:
         if config.checkpoint_path is not None:
             state = torch.load(config.checkpoint_path,
                                map_location=self.device)
-            self.model.load_state_dict(state['model'])
-            self.opt.load_state_dict(state['opt'])
-            self.scheduler.load_state_dict(state['scheduler'])
+            self.load_state_dict(state)
 
         self.n_accumulate = config.n_accumulate
         self._accumulated = 0
 
         self.train_log_freq = config.train_log_freq
         self.val_log_freq = config.val_log_freq
+        self.checkpointing_freq = config.checkpointing_freq
 
         wandb.init(job_type='train-model', config=config)
         wandb.watch(model, log='parameters', log_freq=self.train_log_freq,
@@ -53,18 +52,36 @@ class DefaultTrainer:
         self.best_state = OrderedDict()
         self.best_loss = 1e9
 
+    def load_state_dict(self, d):
+        self.model.load_state_dict(d['model'])
+        self.opt.load_state_dict(d['opt'])
+        self.scheduler.load_state_dict(d['scheduler'])
+
+    def state_dict(self):
+        state = OrderedDict()
+        state['model'] = deepcopy(self.model.state_dict())
+        state['opt'] = deepcopy(self.opt.state_dict())
+        state['scheduler'] = deepcopy(
+            self.scheduler.state_dict()
+        )
+        return state
+
     def train(self, num_epochs, verbose=True):
         for i in range(1, num_epochs + 1):
             train_loss = self.train_epoch()
             if verbose:
                 print(f'Epoch {i} train loss: {train_loss}')
             val_loss = self.validate()
-            if val_loss < self.best_loss:
-                self.best_loss = val_loss
+            if train_loss < self.best_loss:
+                self.best_loss = train_loss
                 self._update_state()
             if verbose:
                 print(f'Epoch {i} validation loss: {val_loss}')
                 print('-' * 100)
+            if i % self.checkpointing_freq == 0:
+                p = (self._checkpoint_path.parent /
+                     f'state{self.scheduler.last_epoch}.pth')
+                torch.save(self.state_dict(), str(p))
         a = wandb.Artifact('trainer_state', type='trainer-state')
         a.add_file(self._checkpoint_path)
         wandb.log_artifact(a)
@@ -178,7 +195,7 @@ class DefaultTrainer:
         data = {}
         if train:
             data = {'train/loss': loss.item(),
-                    'train/lr': self.scheduler.get_last_lr()}
+                    'train/lr': self.scheduler.get_last_lr()[0]}
         if prepare_audio:
             data.update(self._prepare_audio(specs, output,
                                             batch.transcript, train))
@@ -186,13 +203,9 @@ class DefaultTrainer:
         return loss, data
 
     def _update_state(self):
-        wandb.summary['val_loss'] = self.best_loss
+        wandb.summary['train/loss'] = self.best_loss
+        self.best_state = self.state_dict()
 
-        self.best_state['model'] = deepcopy(self.model.state_dict())
-        self.best_state['opt'] = deepcopy(self.opt.state_dict())
-        self.best_state['scheduler'] = deepcopy(
-            self.scheduler.state_dict()
-        )
         if self._checkpoint_path.exists():
             self._checkpoint_path.unlink()
         torch.save(self.best_state, str(self._checkpoint_path))

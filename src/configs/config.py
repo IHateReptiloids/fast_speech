@@ -1,12 +1,12 @@
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Tuple
 
 import torch
 
 
 @dataclass
 class FastSpeechConfig:
-    checkpoint_path: Optional[str] = None
+    checkpoint_path: str = None
     data_dir: str = 'data/lj_speech'
     device: torch.device = torch.device('cuda:0' if torch.cuda.is_available()
                                         else 'cpu')
@@ -36,6 +36,7 @@ class FastSpeechConfig:
     warmup_steps: int = 4000
     weight_decay: float = 0.0
     # Training params
+    checkpointing_freq: int = 5
     num_epochs: int = 10
     train_batch_size: int = 16
     train_log_freq: int = 100
