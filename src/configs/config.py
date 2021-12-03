@@ -34,14 +34,15 @@ class FastSpeechConfig:
     initial_lr: float = 1.0
     warmup_steps: int = 4000
     weight_decay: float = 0.0
-    # Logger params
-    log_freq: int = 100
     # Training params
     num_epochs: int = 10
     train_batch_size: int = 32
+    train_log_freq: int = 100
     train_num_workers: int = 4
     val_batch_size: int = 32
+    val_log_freq: int = 10
     val_num_workers: int = 4
+    n_accumulate: int = 4
 
 
 @dataclass

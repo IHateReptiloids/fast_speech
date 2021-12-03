@@ -3,7 +3,6 @@ from functools import partial
 from argparse_dataclass import ArgumentParser
 import torch
 from torchinfo import summary
-import wandb
 
 from src.aligners import GraphemeAligner
 from src.configs import FastSpeechConfig, FastSpeech2Config
@@ -11,6 +10,7 @@ from src.data_utils import collate, LJSpeechDataset, Wav2Spec
 from src.models import FastSpeech
 from src.trainers import DefaultTrainer
 from src.utils import seed_all
+from src.vocoders import WaveGlow
 
 
 TRAIN_INDICES = 'data/lj_speech/train_indices.txt'
@@ -63,15 +63,15 @@ scheduler = torch.optim.lr_scheduler.LambdaLR(opt, partial(lr_multiplier,
                                                            config))
 wav2spec = Wav2Spec(config)
 
-wandb.init(job_type='train-model', config=config)
-wandb.watch(fs, log='all', log_freq=config.log_freq, log_graph=True)
+vocoder = WaveGlow(config.device)
 
 trainer = DefaultTrainer(
-    config.device,
+    config,
     fs,
     opt,
     scheduler,
     wav2spec,
+    vocoder,
     train_loader=train_loader,
     val_loader=val_loader
 )

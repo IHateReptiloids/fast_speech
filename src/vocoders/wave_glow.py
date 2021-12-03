@@ -1,13 +1,17 @@
+import sys
 from pathlib import Path
 
 from google_drive_downloader import GoogleDriveDownloader as gdd
 import torch
 import torch.nn as nn
 
+sys.path.append('waveglow')
 GDRIVE_FILE_ID = '1rpK8CzAAirq9sWZhe9nlfvxMF1dRgFbF'
 
 
 class WaveGlow(nn.Module):
+    OUT_SAMPLE_RATE = 22050
+
     def __init__(
         self,
         device,
