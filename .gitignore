@@ -1,6 +1,7 @@
 .vscode/
 data/lj_speech/LJSpeech-1.1/
 data/waveglow
+wandb/
 waveglow/
 *.wav
 **/__pycache__

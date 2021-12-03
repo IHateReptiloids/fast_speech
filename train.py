@@ -3,6 +3,7 @@ from functools import partial
 from argparse_dataclass import ArgumentParser
 import torch
 from torchinfo import summary
+import wandb
 
 from src.aligners import GraphemeAligner
 from src.configs import FastSpeechConfig, FastSpeech2Config
@@ -61,6 +62,9 @@ opt = torch.optim.Adam(
 scheduler = torch.optim.lr_scheduler.LambdaLR(opt, partial(lr_multiplier,
                                                            config))
 wav2spec = Wav2Spec(config)
+
+wandb.init(job_type='train-model', config=config)
+wandb.watch(fs, log='all', log_freq=config.log_freq, log_graph=True)
 
 trainer = DefaultTrainer(
     config.device,

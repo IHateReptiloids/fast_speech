@@ -3,6 +3,7 @@ from copy import deepcopy
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
+import wandb
 
 from src.data_utils import Batch
 
@@ -35,6 +36,7 @@ class DefaultTrainer:
             if verbose:
                 print(f'Epoch {i} train loss: {train_loss}')
             val_loss = self.validate()
+            wandb.log({'val/loss': val_loss}, step=self.scheduler.last_epoch)
             if val_loss < self.best_loss:
                 self.best_loss = val_loss
                 self.best_state = deepcopy(self.model.state_dict())
@@ -59,6 +61,8 @@ class DefaultTrainer:
                 self.opt.zero_grad()
                 loss.backward()
                 self.opt.step()
+                wandb.log({'train/loss': loss.item()},
+                          step=self.scheduler.last_epoch)
                 if self.scheduler is not None:
                     self.scheduler.step()
             total_loss += loss.item()
