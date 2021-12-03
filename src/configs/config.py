@@ -36,10 +36,10 @@ class FastSpeechConfig:
     weight_decay: float = 0.0
     # Training params
     num_epochs: int = 10
-    train_batch_size: int = 32
+    train_batch_size: int = 16
     train_log_freq: int = 100
     train_num_workers: int = 4
-    val_batch_size: int = 32
+    val_batch_size: int = 16
     val_log_freq: int = 10
     val_num_workers: int = 4
     n_accumulate: int = 4

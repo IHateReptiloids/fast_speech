@@ -18,32 +18,37 @@ class LJSpeechDataset(torchaudio.datasets.LJSPEECH):
         if indices_path is not None:
             self._indices = np.loadtxt(indices_path, dtype=np.int32)
 
-        self._durations_cache = {}
+        self._cache = {}
 
     def __getitem__(self, index: int):
         if self._indices is not None:
             index = self._indices[index]
+        res = self._cache.get(index)
+        if res is not None:
+            return res
+
         waveform, _, _, transcript = super().__getitem__(index)
-        waveform.squeeze_()
+        waveform = waveform.to(self._aligner.device).squeeze()
 
         transcript = transcript.lower()
         transcript = transcript.replace('"', "'")
         transcript = ''.join(filter(lambda c: c in self._tokens, transcript))
 
-        waveform_length = torch.tensor([len(waveform)]).int()
+        waveform_length = torch.tensor([len(waveform)]).int() \
+            .to(self._aligner.device)
 
         tokens, token_lengths = self._tokenizer(transcript)
-        tokens.squeeze_()
+        tokens = tokens.to(self._aligner.device).squeeze()
+        token_lengths = token_lengths.to(self._aligner.device)
         assert token_lengths.item() == len(transcript), transcript
 
-        durations = self._durations_cache.get(index)
-        if durations is None:
-            durations = self._aligner(waveform[None, :], waveform_length,
-                                      transcript).squeeze()
-            self._durations_cache[index] = durations
+        durations = self._aligner(waveform[None, :], waveform_length,
+                                  transcript).squeeze()
 
-        return (waveform, waveform_length, transcript,
-                tokens, token_lengths, durations)
+        res = (waveform, waveform_length, transcript,
+               tokens, token_lengths, durations)
+        self._cache[index] = res
+        return res
 
     def __len__(self):
         if self._indices is not None:

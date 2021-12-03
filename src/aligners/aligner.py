@@ -47,6 +47,7 @@ class GraphemeAligner(nn.Module):
             orig_freq=config.sample_rate, new_freq=WAV2VEC_SR
         )
         self.to(config.device)
+        self.device = config.device
 
     def _decode_text(self, text):
         text = text.replace(' ', '|').upper()
