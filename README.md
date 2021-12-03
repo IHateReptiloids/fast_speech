@@ -4,6 +4,7 @@
 ## Установка
 ```
 pip install -r requirements.txt -f https://download.pytorch.org/whl/cu113/torch_stable.html
+git clone https://github.com/NVIDIA/waveglow.git
 ```
 
 ## Выполненная работа
