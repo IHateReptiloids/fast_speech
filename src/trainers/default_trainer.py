@@ -170,7 +170,8 @@ class DefaultTrainer:
 
         data = {}
         if train:
-            data = {'train/loss': loss.item()}
+            data = {'train/loss': loss.item(),
+                    'train/lr': self.scheduler.get_last_lr()}
         if prepare_audio:
             data.update(self._prepare_audio(specs, output,
                                             batch.transcript, train))
