@@ -32,6 +32,13 @@ class DefaultTrainer:
         self.train_loader = train_loader
         self.val_loader = val_loader
 
+        if config.checkpoint_path is not None:
+            state = torch.load(config.checkpoint_path,
+                               map_location=self.device)
+            self.model.load_state_dict(state['model'])
+            self.opt.load_state_dict(state['opt'])
+            self.scheduler.load_state_dict(state['scheduler'])
+
         self.n_accumulate = config.n_accumulate
         self._accumulated = 0
 

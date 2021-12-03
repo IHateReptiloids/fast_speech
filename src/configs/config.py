@@ -1,11 +1,12 @@
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Optional, Tuple
 
 import torch
 
 
 @dataclass
 class FastSpeechConfig:
+    checkpoint_path: Optional[str] = None
     data_dir: str = 'data/lj_speech'
     device: torch.device = torch.device('cuda:0' if torch.cuda.is_available()
                                         else 'cpu')
