@@ -123,7 +123,7 @@ class DefaultTrainer:
             f'{prefix}output_wav':
                 wandb.Audio(out_wav,
                             sample_rate=self.vocoder.OUT_SAMPLE_RATE),
-            f'{prefix}text': transcripts[index]
+            f'{prefix}text': wandb.Html(transcripts[index])
         }
 
     def _process_batch(self, batch: Batch, prepare_audio: bool, train: bool):
