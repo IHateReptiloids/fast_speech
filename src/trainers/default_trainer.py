@@ -141,17 +141,15 @@ class DefaultTrainer:
         index = torch.randint(0, len(gt_specs), (1,)).item()
         prefix = 'train/' if train else 'val/'
 
-        gt_wav = self.vocoder.inference(
-            gt_specs[index, :, :gt_specs_lengths[index]].unsqueeze(0)
-        ).squeeze().cpu()
-        out_wav = self.vocoder.inference(
-            out_specs[index, :, :out_specs_lengths[index]].unsqueeze(0)
-        ).squeeze().cpu()
+        gt_spec = gt_specs[index, :, :gt_specs_lengths[index]]
+        out_spec = out_specs[index, :, :out_specs_lengths[index]]
+        gt_wav = self.vocoder.inference(gt_spec.unsqueeze(0)).squeeze().cpu()
+        out_wav = self.vocoder.inference(out_spec.unsqueeze(0)).squeeze().cpu()
 
         return {
-            f'{prefix}ground_truth_spec': wandb.Image(gt_specs[index].cpu(),
+            f'{prefix}ground_truth_spec': wandb.Image(gt_spec.cpu(),
                                                       mode='RGB'),
-            f'{prefix}output_spec': wandb.Image(out_specs[index].cpu(),
+            f'{prefix}output_spec': wandb.Image(out_spec.cpu(),
                                                 mode='RGB'),
             f'{prefix}ground_truth_wav':
                 wandb.Audio(gt_wav,
