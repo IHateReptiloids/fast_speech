@@ -81,14 +81,14 @@ class GraphemeAligner(nn.Module):
             segments = self._merge_repeats(texts[index], path)
 
             num_frames = emission.shape[0]
-            relative_durations = torch.tensor([
-                segment.length / num_frames for segment in segments
-            ])
+            seg_lengths = [segment.length / num_frames for segment in segments]
+            seg_lengths.append(1.0 - sum(seg_lengths))
+            relative_durations = torch.tensor(seg_lengths)
 
             durations.append(relative_durations)
 
         durations = nn.utils.rnn.pad_sequence(durations).transpose(0, 1)
-        return durations / durations.sum(dim=-1, keepdim=True)
+        return durations
 
     def _get_trellis(self, emission, tokens, blank_id=0):
         num_frame = emission.size(0)

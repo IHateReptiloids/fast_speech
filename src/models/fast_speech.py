@@ -58,7 +58,15 @@ class LengthRegulator(nn.Module):
         predicted = self.duration_predictor(x)
         assert predicted.shape == x.shape[:-1]
         if y is not None:
-            lengths = y.round().int()
+            assert len(y) == len(predicted)
+            x = torch.cat((x, torch.zeros(x.shape[0], 1, x.shape[2])), dim=1)
+            mx_len = 0
+            for i, lengths in enumerate(y):
+                mx_len = max(mx_len, len(lengths))
+                x[i, len(lengths) - 1, :] = 0
+            assert mx_len == x.shape[1]
+            lengths = torch.nn.utils.rnn.pad_sequence(y, batch_first=True) \
+                .round().int()
         else:
             lengths = predicted.round().int()
         repeated = []
