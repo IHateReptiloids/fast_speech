@@ -35,6 +35,8 @@ class DefaultTrainer:
         if config.checkpoint_path is not None:
             state = torch.load(config.checkpoint_path,
                                map_location=self.device)
+            state['opt']['param_groups'][0]['initial_lr'] = config.initial_lr
+            state['scheduler']['base_lrs'] = [config.initial_lr]
             self.load_state_dict(state)
 
         self.n_accumulate = config.n_accumulate
@@ -126,15 +128,25 @@ class DefaultTrainer:
                   step=self.scheduler.last_epoch)
         return total_loss
 
-    def _prepare_audio(self, gt_specs, out_specs, transcripts, train: bool):
+    def _prepare_audio(
+        self,
+        gt_specs,
+        gt_specs_lengths,
+        out_specs,
+        out_specs_lengths,
+        transcripts,
+        train: bool
+    ):
         assert len(gt_specs) == len(out_specs)
         index = torch.randint(0, len(gt_specs), (1,)).item()
         prefix = 'train/' if train else 'val/'
 
-        gt_wav = self.vocoder.inference(gt_specs[index].unsqueeze(0)) \
-            .squeeze().cpu()
-        out_wav = self.vocoder.inference(out_specs[index].unsqueeze(0)) \
-            .squeeze().cpu()
+        gt_wav = self.vocoder.inference(
+            gt_specs[index, :, :gt_specs_lengths[index]].unsqueeze(0)
+        ).squeeze().cpu()
+        out_wav = self.vocoder.inference(
+            out_specs[index, :, :out_specs_lengths[index]].unsqueeze(0)
+        ).squeeze().cpu()
 
         return {
             f'{prefix}ground_truth_spec': wandb.Image(gt_specs[index].cpu(),
@@ -197,7 +209,8 @@ class DefaultTrainer:
             data = {'train/loss': loss.item(),
                     'train/lr': self.scheduler.get_last_lr()[0]}
         if prepare_audio:
-            data.update(self._prepare_audio(specs, output,
+            data.update(self._prepare_audio(specs, spec_lengths, output,
+                                            output_lengths,
                                             batch.transcript, train))
 
         return loss, data
