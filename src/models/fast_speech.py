@@ -59,7 +59,10 @@ class LengthRegulator(nn.Module):
         assert predicted.shape == x.shape[:-1]
         if y is not None:
             assert len(y) == len(predicted)
-            x = torch.cat((x, torch.zeros(x.shape[0], 1, x.shape[2])), dim=1)
+            x = torch.cat(
+                (x, torch.zeros(x.shape[0], 1, x.shape[2], device=x.device)),
+                dim=1
+            )
             mx_len = 0
             for i, lengths in enumerate(y):
                 mx_len = max(mx_len, len(lengths))
