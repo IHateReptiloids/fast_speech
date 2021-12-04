@@ -165,25 +165,21 @@ class DefaultTrainer:
         x = batch.tokens.to(self.device)
         output, predicted_lengths, output_lengths = None, None, None
 
-        durations = batch.durations
-        assert len(durations) == len(wavs)
-        grapheme_lengths = [
-            durations[i].to(self.device) * spec_lengths[i]
-            for i in range(len(durations))
-        ]
+        durations = batch.durations.to(self.device)
+        assert durations.dim() == 2 and len(durations) == len(wavs)
+        assert x.shape == durations.shape
+        grapheme_lengths = (durations * spec_lengths[:, None])
 
         if train:
             output, predicted_lengths = self.model(x, grapheme_lengths)
-            output_lengths = torch.tensor(
-                [length.round().int().sum() for length in grapheme_lengths]
-            )
+            output_lengths = grapheme_lengths.round().int().sum(dim=-1)
         else:
             output, predicted_lengths = self.model(x)
             output_lengths = predicted_lengths.round().int().sum(dim=-1)
 
         assert (output.dim() == 3 and
                 output.shape[-1] == torch.max(output_lengths).item())
-        spec_loss = 0
+        loss = 0
         for i in range(output.shape[0]):
             reshaped = F.interpolate(
                 specs[i, :, :spec_lengths[i]].unsqueeze(0),
@@ -191,18 +187,10 @@ class DefaultTrainer:
                 mode='linear',
                 align_corners=False
             )
-            spec_loss += F.mse_loss(output[i, :, :output_lengths[i]],
-                                    reshaped.squeeze())
-        spec_loss /= len(output)
-
-        grapheme_lengths = torch.nn.utils.rnn.pad_sequence(
-            [lengths[:-1] for lengths in grapheme_lengths],
-            batch_first=True
-        )
-        assert grapheme_lengths.shape == predicted_lengths.shape
-        length_loss = F.mse_loss(grapheme_lengths, predicted_lengths)
-
-        loss = spec_loss + length_loss
+            loss += F.mse_loss(output[i, :, :output_lengths[i]],
+                               reshaped.squeeze())
+        loss = loss / output.shape[0] + F.mse_loss(grapheme_lengths,
+                                                   predicted_lengths)
 
         data = {}
         if train:

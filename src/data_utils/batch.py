@@ -11,4 +11,4 @@ class Batch:
     transcript: List[str]
     tokens: torch.Tensor
     token_lengths: torch.Tensor
-    durations: List[torch.Tensor]
+    durations: torch.Tensor

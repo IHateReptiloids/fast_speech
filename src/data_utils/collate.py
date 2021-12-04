@@ -16,5 +16,8 @@ def collate(instances):
     tokens = pad_sequence([tokens_ for tokens_ in tokens], batch_first=True)
     token_lengths = torch.cat(token_lengths)
 
+    durations = pad_sequence([durations_ for durations_ in durations],
+                             batch_first=True)
+
     return Batch(waveform, waveform_length, transcript,
                  tokens, token_lengths, durations)
