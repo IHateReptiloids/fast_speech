@@ -23,9 +23,8 @@ def lr_multiplier(config: FastSpeechConfig, step: int):
             min(step ** -0.5, step * (config.warmup_steps ** -1.5)))
 
 
-seed_all()
-
 config = ArgumentParser(FastSpeech2Config).parse_args()
+seed_all(config.random_seed)
 
 fs = FastSpeech(config)
 summary(fs)
