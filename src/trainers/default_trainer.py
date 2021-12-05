@@ -123,7 +123,8 @@ class DefaultTrainer:
             self._accumulated.append(data['train/loss'])
             loss.backward()
             if len(self._accumulated) == self.n_accumulate:
-                loss = sum(self._accumulated) / self.n_accumulate
+                loss = (sum(self._accumulated, start=BatchLoss(0, 0, 0, 0)) /
+                        self.n_accumulate)
                 total_loss += loss.loss
                 wandb.log(
                     {
