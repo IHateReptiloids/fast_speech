@@ -1,4 +1,4 @@
-from collections import DefaultDict, OrderedDict
+from collections import defaultdict, OrderedDict
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
@@ -184,7 +184,7 @@ class DefaultTrainer:
     ):
         assert (len(gt_specs) == len(out_specs) == len(gt_specs_lengths) ==
                 len(out_specs_lengths) == len(transcripts))
-        res = DefaultDict(list)
+        res = defaultdict(list)
         prefix = 'train/' if train else 'val/'
         for index in indices:
             gt_spec = gt_specs[index, :, :gt_specs_lengths[index]]
