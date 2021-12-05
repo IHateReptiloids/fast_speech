@@ -10,6 +10,7 @@ class FastSpeechConfig:
     data_dir: str = 'data/lj_speech'
     device: torch.device = torch.device('cuda:0' if torch.cuda.is_available()
                                         else 'cpu')
+    random_seed: int = 3407
     # MelSpectrogram params
     sample_rate: int = 22050
     win_length: int = 1024
