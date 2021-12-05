@@ -159,17 +159,22 @@ class DefaultTrainer:
                     indices.append(torch.randint(0, bs, (1,)).item())
             loss, data = self._process_batch(batch, indices, train=False)
             total_loss += loss.item()
+            for k in list(data.keys()):
+                if not isinstance(data[k], list):
+                    data[k] = [data[k]]
+
             if prepare_audio:
                 if table is None:
                     table = wandb.Table(columns=sorted(data.keys()))
-                if log_all:
-                    raise NotImplementedError
-                data_ = list(zip(*sorted(data.items())))[1]
-                table.add_data(*data_)
+                for row in zip(list(zip(*sorted(data.items())))[1]):
+                    table.add_data(*row)
 
         total_loss /= len(self.val_loader)
+        step = 0
+        if self.scheduler is not None:
+            step = self.scheduler.last_epoch
         wandb.log({'val/audio': table, 'val/loss': total_loss},
-                  step=self.scheduler.last_epoch)
+                  step=step)
         return total_loss
 
     def _prepare_audio(
