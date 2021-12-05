@@ -98,6 +98,7 @@ class DefaultTrainer:
                 self._accumulated == self.n_accumulate
             )
             loss, data = self._process_batch(batch, prepare_audio, train=True)
+            # this is wrong! TODO: log loss only when scheduler step
             wandb.log(data, step=self.scheduler.last_epoch)
             loss.backward()
             if self._accumulated == self.n_accumulate:
@@ -215,7 +216,7 @@ class DefaultTrainer:
 
     def _update_state(self):
         wandb.summary['train/loss'] = self.best_loss
-        self.best_state = self.state_dict()
+        self.best_state = deepcopy(self.state_dict())
 
         if self._checkpoint_path.exists():
             self._checkpoint_path.unlink()
