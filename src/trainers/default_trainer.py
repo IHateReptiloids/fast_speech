@@ -119,23 +119,26 @@ class DefaultTrainer:
                 self.scheduler.last_epoch % self.train_log_freq == 0 and
                 len(self._accumulated) + 1 == self.n_accumulate
             )
-            loss, data = self._process_batch(batch, prepare_audio, train=True)
+            indices = []
+            if prepare_audio:
+                indices.append(torch.randint(0, len(batch), (1,)).item())
+            loss, data = self._process_batch(batch, indices, train=True)
             self._accumulated.append(data['train/loss'])
             loss.backward()
             if len(self._accumulated) == self.n_accumulate:
                 loss = (sum(self._accumulated, BatchLoss(0, 0, 0, 0)) /
                         self.n_accumulate)
                 total_loss += loss.loss
-                wandb.log(
-                    {
+                to_log = {
                         'train/loss': loss.loss,
                         'train/spec_loss': loss.spec_loss,
                         'train/duration_loss': loss.duration_loss,
                         'train/padding_amount': loss.padding_amount,
                         'train/lr': data['train/lr']
-                    },
-                    step=self.scheduler.last_epoch
-                )
+                }
+                if prepare_audio:
+                    to_log.update(data[indices[0]])
+                wandb.log(to_log, step=self.scheduler.last_epoch)
                 self._accumulated = []
                 self.opt.step()
                 self.opt.zero_grad()
@@ -143,13 +146,23 @@ class DefaultTrainer:
         return total_loss / (len(self.train_loader) / self.n_accumulate)
 
     @torch.no_grad()
-    def validate(self):
+    def validate(self, log_all=False):
         self.model.eval()
         total_loss = 0
         table = None
         for i, batch in enumerate(tqdm(self.val_loader)):
             prepare_audio = (i % self.val_log_freq == 0)
-            loss, data = self._process_batch(batch, prepare_audio, train=False)
+            indices = []
+            if prepare_audio:
+                if log_all:
+                    indices = list(range(len(batch)))
+                else:
+                    indices.append(torch.randint(0, len(batch), (1,)).item())
+            loss, data = self._process_batch(batch, indices, train=False)
+            if log_all:
+                raise NotImplementedError
+            else:
+                data = data[indices[0]]
             total_loss += loss.item()
             if prepare_audio:
                 if table is None:
@@ -164,6 +177,7 @@ class DefaultTrainer:
 
     def _prepare_audio(
         self,
+        indices,
         gt_specs,
         gt_specs_lengths,
         out_specs,
@@ -171,30 +185,36 @@ class DefaultTrainer:
         transcripts,
         train: bool
     ):
-        assert len(gt_specs) == len(out_specs)
-        index = torch.randint(0, len(gt_specs), (1,)).item()
+        assert (len(gt_specs) == len(out_specs) == len(gt_specs_lengths) ==
+                len(out_specs_lengths) == len(transcripts))
+        res = {}
         prefix = 'train/' if train else 'val/'
+        for index in indices:
+            gt_spec = gt_specs[index, :, :gt_specs_lengths[index]]
+            out_spec = out_specs[index, :, :out_specs_lengths[index]]
+            gt_wav = self.vocoder.inference(gt_spec.unsqueeze(0)).squeeze() \
+                .cpu()
+            out_wav = self.vocoder.inference(out_spec.unsqueeze(0)).squeeze() \
+                .cpu()
 
-        gt_spec = gt_specs[index, :, :gt_specs_lengths[index]]
-        out_spec = out_specs[index, :, :out_specs_lengths[index]]
-        gt_wav = self.vocoder.inference(gt_spec.unsqueeze(0)).squeeze().cpu()
-        out_wav = self.vocoder.inference(out_spec.unsqueeze(0)).squeeze().cpu()
+            res[index] = {
+                f'{prefix}ground_truth_spec': wandb.Image(gt_spec.cpu()),
+                f'{prefix}output_spec': wandb.Image(out_spec.cpu()),
+                f'{prefix}ground_truth_wav':
+                    wandb.Audio(gt_wav,
+                                sample_rate=self.vocoder.OUT_SAMPLE_RATE),
+                f'{prefix}output_wav':
+                    wandb.Audio(out_wav,
+                                sample_rate=self.vocoder.OUT_SAMPLE_RATE),
+                f'{prefix}text': wandb.Html(transcripts[index])
+            }
+        return res
 
-        return {
-            f'{prefix}ground_truth_spec': wandb.Image(gt_spec.cpu(),
-                                                      mode='RGB'),
-            f'{prefix}output_spec': wandb.Image(out_spec.cpu(),
-                                                mode='RGB'),
-            f'{prefix}ground_truth_wav':
-                wandb.Audio(gt_wav,
-                            sample_rate=self.vocoder.OUT_SAMPLE_RATE),
-            f'{prefix}output_wav':
-                wandb.Audio(out_wav,
-                            sample_rate=self.vocoder.OUT_SAMPLE_RATE),
-            f'{prefix}text': wandb.Html(transcripts[index])
-        }
-
-    def _process_batch(self, batch: Batch, prepare_audio: bool, train: bool):
+    def _process_batch(self, batch: Batch, indices, train: bool):
+        '''
+        indices are indices of audios in batch to pass to vocoder
+        and return
+        '''
         wavs = batch.waveform.to(self.device)
         assert wavs.dim() == 2
 
@@ -246,10 +266,9 @@ class DefaultTrainer:
                                             duration_loss.item(),
                                             padding_amount),
                     'train/lr': self.scheduler.get_last_lr()[0]}
-        if prepare_audio:
-            data.update(self._prepare_audio(specs, spec_lengths, output,
-                                            output_lengths,
-                                            batch.transcript, train))
+        data.update(self._prepare_audio(indices, specs, spec_lengths, output,
+                                        output_lengths, batch.transcript,
+                                        train))
 
         return loss, data
 
