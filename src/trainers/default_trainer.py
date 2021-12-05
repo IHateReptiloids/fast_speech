@@ -120,7 +120,7 @@ class DefaultTrainer:
                 len(self._accumulated) + 1 == self.n_accumulate
             )
             indices = []
-            bs = len(batch.transcripts)
+            bs = len(batch.transcript)
             if prepare_audio:
                 indices.append(torch.randint(0, bs, (1,)).item())
             loss, data = self._process_batch(batch, indices, train=True)
@@ -151,7 +151,7 @@ class DefaultTrainer:
         for i, batch in enumerate(tqdm(self.val_loader)):
             prepare_audio = (i % self.val_log_freq == 0)
             indices = []
-            bs = len(batch.transcripts)
+            bs = len(batch.transcript)
             if prepare_audio:
                 if log_all:
                     indices = list(range(bs))
