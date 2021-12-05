@@ -159,10 +159,11 @@ class DefaultTrainer:
                 else:
                     indices.append(torch.randint(0, len(batch), (1,)).item())
             loss, data = self._process_batch(batch, indices, train=False)
-            if log_all:
-                raise NotImplementedError
-            else:
-                data = data[indices[0]]
+            if prepare_audio:
+                if log_all:
+                    raise NotImplementedError
+                else:
+                    data = data[indices[0]]
             total_loss += loss.item()
             if prepare_audio:
                 if table is None:
