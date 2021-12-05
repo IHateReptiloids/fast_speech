@@ -189,13 +189,6 @@ class DefaultTrainer:
         assert len(gt_specs) == len(out_specs)
         index = torch.randint(0, len(gt_specs), (1,)).item()
         prefix = 'train/' if train else 'val/'
-        for index in indices:
-            gt_spec = gt_specs[index, :, :gt_specs_lengths[index]]
-            out_spec = out_specs[index, :, :out_specs_lengths[index]]
-            gt_wav = self.vocoder.inference(gt_spec.unsqueeze(0)).squeeze() \
-                .cpu()
-            out_wav = self.vocoder.inference(out_spec.unsqueeze(0)).squeeze() \
-                .cpu()
 
         gt_spec = gt_specs[index, :, :gt_specs_lengths[index]]
         out_spec = out_specs[index, :, :out_specs_lengths[index]]
@@ -209,17 +202,12 @@ class DefaultTrainer:
                                                 mode='RGB'),
             f'{prefix}ground_truth_wav':
                 wandb.Audio(gt_wav,
-                            sample_rate=self.vocoder.OUT_SAMPLE_RATE)
-            )
-            res[f'{prefix}output_wav'].append(
+                            sample_rate=self.vocoder.OUT_SAMPLE_RATE),
+            f'{prefix}output_wav':
                 wandb.Audio(out_wav,
                             sample_rate=self.vocoder.OUT_SAMPLE_RATE),
-            )
-            res[f'{prefix}text'].append(wandb.Html(transcripts[index]))
-        if len(indices) == 1:
-            for k in list(res.keys()):
-                res[k] = res[k][0]
-        return res
+            f'{prefix}text': wandb.Html(transcripts[index])
+        }
 
     def _process_batch(self, batch: Batch, indices, train: bool):
         '''
