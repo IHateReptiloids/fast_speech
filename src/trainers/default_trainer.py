@@ -1,4 +1,4 @@
-from collections import OrderedDict
+from collections import DefaultDict, OrderedDict
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
@@ -120,8 +120,9 @@ class DefaultTrainer:
                 len(self._accumulated) + 1 == self.n_accumulate
             )
             indices = []
+            bs = len(batch.transcripts)
             if prepare_audio:
-                indices.append(torch.randint(0, len(batch), (1,)).item())
+                indices.append(torch.randint(0, bs, (1,)).item())
             loss, data = self._process_batch(batch, indices, train=True)
             self._accumulated.append(data['train/loss'])
             loss.backward()
@@ -129,16 +130,13 @@ class DefaultTrainer:
                 loss = (sum(self._accumulated, BatchLoss(0, 0, 0, 0)) /
                         self.n_accumulate)
                 total_loss += loss.loss
-                to_log = {
-                        'train/loss': loss.loss,
-                        'train/spec_loss': loss.spec_loss,
-                        'train/duration_loss': loss.duration_loss,
-                        'train/padding_amount': loss.padding_amount,
-                        'train/lr': data['train/lr']
-                }
-                if prepare_audio:
-                    to_log.update(data[indices[0]])
-                wandb.log(to_log, step=self.scheduler.last_epoch)
+                data.update({
+                    'train/loss': loss.loss,
+                    'train/spec_loss': loss.spec_loss,
+                    'train/duration_loss': loss.duration_loss,
+                    'train/padding_amount': loss.padding_amount,
+                })
+                wandb.log(data, step=self.scheduler.last_epoch)
                 self._accumulated = []
                 self.opt.step()
                 self.opt.zero_grad()
@@ -153,21 +151,19 @@ class DefaultTrainer:
         for i, batch in enumerate(tqdm(self.val_loader)):
             prepare_audio = (i % self.val_log_freq == 0)
             indices = []
+            bs = len(batch.transcripts)
             if prepare_audio:
                 if log_all:
-                    indices = list(range(len(batch)))
+                    indices = list(range(bs))
                 else:
-                    indices.append(torch.randint(0, len(batch), (1,)).item())
+                    indices.append(torch.randint(0, bs, (1,)).item())
             loss, data = self._process_batch(batch, indices, train=False)
-            if prepare_audio:
-                if log_all:
-                    raise NotImplementedError
-                else:
-                    data = data[indices[0]]
             total_loss += loss.item()
             if prepare_audio:
                 if table is None:
                     table = wandb.Table(columns=sorted(data.keys()))
+                if log_all:
+                    raise NotImplementedError
                 data_ = list(zip(*sorted(data.items())))[1]
                 table.add_data(*data_)
 
@@ -188,7 +184,7 @@ class DefaultTrainer:
     ):
         assert (len(gt_specs) == len(out_specs) == len(gt_specs_lengths) ==
                 len(out_specs_lengths) == len(transcripts))
-        res = {}
+        res = DefaultDict(list)
         prefix = 'train/' if train else 'val/'
         for index in indices:
             gt_spec = gt_specs[index, :, :gt_specs_lengths[index]]
@@ -198,17 +194,21 @@ class DefaultTrainer:
             out_wav = self.vocoder.inference(out_spec.unsqueeze(0)).squeeze() \
                 .cpu()
 
-            res[index] = {
-                f'{prefix}ground_truth_spec': wandb.Image(gt_spec.cpu()),
-                f'{prefix}output_spec': wandb.Image(out_spec.cpu()),
-                f'{prefix}ground_truth_wav':
-                    wandb.Audio(gt_wav,
-                                sample_rate=self.vocoder.OUT_SAMPLE_RATE),
-                f'{prefix}output_wav':
-                    wandb.Audio(out_wav,
-                                sample_rate=self.vocoder.OUT_SAMPLE_RATE),
-                f'{prefix}text': wandb.Html(transcripts[index])
-            }
+            res[f'{prefix}ground_truth_spec'] \
+                .append(wandb.Image(gt_spec.cpu()))
+            res[f'{prefix}output_spec'].append(wandb.Image(out_spec.cpu()))
+            res[f'{prefix}ground_truth_wav'].append(
+                wandb.Audio(gt_wav,
+                            sample_rate=self.vocoder.OUT_SAMPLE_RATE)
+            )
+            res[f'{prefix}output_wav'].append(
+                wandb.Audio(out_wav,
+                            sample_rate=self.vocoder.OUT_SAMPLE_RATE),
+            )
+            res[f'{prefix}text'].append(wandb.Html(transcripts[index]))
+        if len(indices) == 1:
+            for k in list(res.keys()):
+                res[k] = res[k][0]
         return res
 
     def _process_batch(self, batch: Batch, indices, train: bool):
