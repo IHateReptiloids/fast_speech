@@ -1,4 +1,5 @@
 .vscode/
+artifacts/
 data/lj_speech/LJSpeech-1.1/
 data/waveglow
 wandb/
