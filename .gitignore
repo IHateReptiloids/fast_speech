@@ -4,5 +4,6 @@ data/lj_speech/LJSpeech-1.1/
 data/waveglow
 wandb/
 waveglow/
+*.pth
 *.wav
 **/__pycache__
