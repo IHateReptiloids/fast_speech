@@ -1,6 +1,5 @@
-from collections import defaultdict, OrderedDict
+from collections import OrderedDict
 from copy import deepcopy
-from dataclasses import dataclass
 from pathlib import Path
 
 import torch
@@ -10,28 +9,6 @@ import wandb
 
 from src.data_utils import Batch
 from src.configs import FastSpeechConfig
-
-
-@dataclass
-class BatchLoss:
-    loss: float
-    spec_loss: float
-    duration_loss: float
-    padding_amount: float
-
-    def __add__(self, other):
-        loss = self.loss + other.loss
-        spec_loss = self.spec_loss + other.spec_loss
-        duration_loss = self.duration_loss + other.duration_loss
-        padding_amount = self.padding_amount + other.padding_amount
-        return BatchLoss(loss, spec_loss, duration_loss, padding_amount)
-
-    def __truediv__(self, other: float):
-        loss = self.loss / other
-        spec_loss = self.spec_loss / other
-        duration_loss = self.duration_loss / other
-        padding_amount = self.padding_amount / other
-        return BatchLoss(loss, spec_loss, duration_loss, padding_amount)
 
 
 class DefaultTrainer:
@@ -58,12 +35,10 @@ class DefaultTrainer:
         if config.checkpoint_path is not None:
             state = torch.load(config.checkpoint_path,
                                map_location=self.device)
-            state['opt']['param_groups'][0]['initial_lr'] = config.initial_lr
-            state['scheduler']['base_lrs'] = [config.initial_lr]
             self.load_state_dict(state)
 
         self.n_accumulate = config.n_accumulate
-        self._accumulated = []
+        self._accumulated = 0
 
         self.train_log_freq = config.train_log_freq
         self.val_log_freq = config.val_log_freq
@@ -115,66 +90,40 @@ class DefaultTrainer:
         self.model.train()
         total_loss = 0
         for batch in tqdm(self.train_loader):
+            self._accumulated += 1
             prepare_audio = (
                 self.scheduler.last_epoch % self.train_log_freq == 0 and
-                len(self._accumulated) + 1 == self.n_accumulate
+                self._accumulated == self.n_accumulate
             )
-            indices = []
-            bs = len(batch.transcript)
-            if prepare_audio:
-                indices.append(torch.randint(0, bs, (1,)).item())
-            loss, data = self._process_batch(batch, indices, train=True)
-            self._accumulated.append(data['train/loss'])
+            loss, data = self._process_batch(batch, prepare_audio, train=True)
+            wandb.log(data, step=self.scheduler.last_epoch)
             loss.backward()
-            if len(self._accumulated) == self.n_accumulate:
-                loss = (sum(self._accumulated, BatchLoss(0, 0, 0, 0)) /
-                        self.n_accumulate)
-                total_loss += loss.loss
-                data.update({
-                    'train/loss': loss.loss,
-                    'train/spec_loss': loss.spec_loss,
-                    'train/duration_loss': loss.duration_loss,
-                    'train/padding_amount': loss.padding_amount,
-                })
-                wandb.log(data, step=self.scheduler.last_epoch)
-                self._accumulated = []
+            if self._accumulated == self.n_accumulate:
+                self._accumulated = 0
                 self.opt.step()
                 self.opt.zero_grad()
                 self.scheduler.step()
-        return total_loss / (len(self.train_loader) / self.n_accumulate)
+            total_loss += loss.item()
+        return total_loss / len(self.train_loader)
 
     @torch.no_grad()
-    def validate(self, log_all=False):
+    def validate(self):
         self.model.eval()
         total_loss = 0
         table = None
         for i, batch in enumerate(tqdm(self.val_loader)):
             prepare_audio = (i % self.val_log_freq == 0)
-            indices = []
-            bs = len(batch.transcript)
-            if prepare_audio:
-                if log_all:
-                    indices = list(range(bs))
-                else:
-                    indices.append(torch.randint(0, bs, (1,)).item())
-            loss, data = self._process_batch(batch, indices, train=False)
+            loss, data = self._process_batch(batch, prepare_audio, train=False)
             total_loss += loss.item()
-            for k in list(data.keys()):
-                if not isinstance(data[k], list):
-                    data[k] = [data[k]]
-
             if prepare_audio:
                 if table is None:
                     table = wandb.Table(columns=sorted(data.keys()))
-                for row in zip(list(zip(*sorted(data.items())))[1]):
-                    table.add_data(*row)
+                data_ = list(zip(*sorted(data.items())))[1]
+                table.add_data(*data_)
 
         total_loss /= len(self.val_loader)
-        step = 0
-        if self.scheduler is not None:
-            step = self.scheduler.last_epoch
         wandb.log({'val/audio': table, 'val/loss': total_loss},
-                  step=step)
+                  step=self.scheduler.last_epoch)
         return total_loss
 
     def _prepare_audio(
@@ -209,11 +158,7 @@ class DefaultTrainer:
             f'{prefix}text': wandb.Html(transcripts[index])
         }
 
-    def _process_batch(self, batch: Batch, indices, train: bool):
-        '''
-        indices are indices of audios in batch to pass to vocoder
-        and return
-        '''
+    def _process_batch(self, batch: Batch, prepare_audio: bool, train: bool):
         wavs = batch.waveform.to(self.device)
         assert wavs.dim() == 2
 
@@ -242,7 +187,7 @@ class DefaultTrainer:
 
         assert (output.dim() == 3 and
                 output.shape[-1] == torch.max(output_lengths).item())
-        spec_loss = 0
+        loss = 0
         for i in range(output.shape[0]):
             reshaped = F.interpolate(
                 specs[i, :, :spec_lengths[i]].unsqueeze(0),
@@ -250,20 +195,14 @@ class DefaultTrainer:
                 mode='linear',
                 align_corners=False
             )
-            spec_loss += F.mse_loss(output[i, :, :output_lengths[i]],
-                                    reshaped.squeeze())
-        spec_loss = spec_loss / len(output)
-        duration_loss = F.mse_loss(grapheme_lengths, predicted_lengths)
-        loss = spec_loss + duration_loss
-
-        padding_amount = (torch.max(output_lengths) - output_lengths) \
-            .sum().item()
+            loss += F.mse_loss(output[i, :, :output_lengths[i]],
+                               reshaped.squeeze())
+        loss = loss / output.shape[0] + F.mse_loss(grapheme_lengths,
+                                                   predicted_lengths)
 
         data = {}
         if train:
-            data = {'train/loss': BatchLoss(loss.item(), spec_loss.item(),
-                                            duration_loss.item(),
-                                            padding_amount),
+            data = {'train/loss': loss.item(),
                     'train/lr': self.scheduler.get_last_lr()[0]}
         if prepare_audio:
             data.update(self._prepare_audio(specs, spec_lengths, output,
@@ -274,7 +213,7 @@ class DefaultTrainer:
 
     def _update_state(self):
         wandb.summary['train/loss'] = self.best_loss
-        self.best_state = deepcopy(self.state_dict())
+        self.best_state = self.state_dict()
 
         if self._checkpoint_path.exists():
             self._checkpoint_path.unlink()
