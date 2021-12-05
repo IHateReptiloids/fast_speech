@@ -232,8 +232,8 @@ class DefaultTrainer:
                 align_corners=False
             )
             spec_loss += F.mse_loss(output[i, :, :output_lengths[i]],
-                                    reshaped.squeeze())
-        spec_loss = spec_loss / len(output)
+                                    reshaped.squeeze()) * output_lengths[i]
+        spec_loss = spec_loss / (len(output) * output_lengths.sum())
         duration_loss = F.mse_loss(grapheme_lengths, predicted_lengths)
         loss = spec_loss + duration_loss
 
