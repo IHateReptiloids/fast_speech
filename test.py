@@ -26,12 +26,12 @@ aligner = GraphemeAligner(config)
 
 ds = [
     ('A defibrillator is a device that gives a high energy electric shock ' +
-     'to the heart of someone who is in cardiac arrest').lower(),
+     'to the heart of someone who is in cardiac arrest.').lower(),
     ('Massachusetts Institute of Technology may be best known for its math, ' +
-     'science and engineering education').lower(),
+     'science and engineering education.').lower(),
     ('Wasserstein distance or Kantorovich Rubinstein metric ' +
      'is a distance function defined between probability distributions ' +
-     'on a given metric space').lower()
+     'on a given metric space.').lower()
 ]
 
 wav2spec = Wav2Spec(config)
