@@ -35,6 +35,8 @@ class DefaultTrainer:
         if config.checkpoint_path is not None:
             state = torch.load(config.checkpoint_path,
                                map_location=self.device)
+            state['opt']['param_groups'][0]['initial_lr'] = config.initial_lr
+            state['scheduler']['base_lrs'] = [config.initial_lr]
             self.load_state_dict(state)
 
         self.n_accumulate = config.n_accumulate
